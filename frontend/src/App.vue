@@ -185,7 +185,7 @@
       <router-view />
     </v-main>
     
-    <!-- Footer - Solo mostrar si no es una página de auth -->
+    <!-- Footer simplificado - SIN ENLACES PROBLEMÁTICOS -->
     <v-footer 
       v-if="!hideNavigation" 
       app 
@@ -193,23 +193,9 @@
       class="text-white"
     >
       <v-container>
-        <v-row align="center">
-          <v-col cols="12" md="6">
-            <span>Plataforma de Empleo &copy; {{ new Date().getFullYear() }}</span>
-          </v-col>
-          <v-col cols="12" md="6" class="text-right">
-            <v-btn
-              v-for="link in footerLinks"
-              :key="link.title"
-              :to="link.route"
-              variant="text"
-              size="small"
-              class="text-white"
-            >
-              {{ link.title }}
-            </v-btn>
-          </v-col>
-        </v-row>
+        <div class="text-center">
+          <span>Plataforma de Empleo &copy; {{ new Date().getFullYear() }}</span>
+        </div>
       </v-container>
     </v-footer>
     
@@ -311,13 +297,6 @@ const allMenuItems = computed(() => {
     ...userMenuItems.value
   ]
 })
-
-const footerLinks = [
-  { title: 'Acerca de', route: '/about' },
-  { title: 'Contacto', route: '/contact' },
-  { title: 'Términos', route: '/terms' },
-  { title: 'Privacidad', route: '/privacy' }
-]
 
 // Métodos
 const loadUser = () => {

@@ -1,14 +1,28 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '/src/views/HomeView.vue'
-import OfertasView from '/src/views/OfertasView.vue'
-import EmpresasView from '/src/views/EmpresasView.vue'
-import PostulantesView from '/src/views/PostulantesView.vue'
+import HomeView from '../views/HomeView.vue'
+import OfertasView from '../views/OfertasView.vue'
+import EmpresasView from '../views/EmpresasView.vue'
+import PostulantesView from '../views/PostulantesView.vue'
+import LoginView from '../views/LoginView.vue'
+import RegisterView from '../views/RegisterView.vue'
 
 const routes = [
   {
     path: '/',
     name: 'home',
     component: HomeView
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: LoginView,
+    meta: { hideNavigation: true }
+  },
+  {
+    path: '/register',
+    name: 'register', 
+    component: RegisterView,
+    meta: { hideNavigation: true }
   },
   {
     path: '/ofertas',
@@ -25,12 +39,16 @@ const routes = [
     name: 'postulantes',
     component: PostulantesView
   },
-
   {
     path: '/postulantes/:id',
     name: 'postulante-detail',
-    component: () => import('/src/views/PostulanteDetailView.vue')
+    component: () => import('../views/PostulanteDetailView.vue')
   },
+  {
+    path: '/curriculum',
+    name: 'curriculum',
+    component: () => import('../views/CurriculumView.vue')
+  }
 ]
 
 const router = createRouter({
