@@ -6,15 +6,20 @@
       color="primary" 
       prominent
       elevation="2"
+      class="app-header"
     >
       <v-app-bar-nav-icon 
         v-if="isMobile" 
         @click="drawer = !drawer"
-      ></v-app-bar-nav-icon>
+      />
       
-      <v-toolbar-title @click="$router.push('/')" class="cursor-pointer">
-        <v-icon class="mr-2">mdi-briefcase</v-icon>
-        Plataforma de Empleo
+      <v-toolbar-title 
+        @click="navigateHome" 
+        class="cursor-pointer d-flex align-center"
+      >
+        <v-icon size="28" class="mr-2">mdi-briefcase</v-icon>
+        <span class="hidden-sm-and-down">Plataforma de Empleo</span>
+        <span class="hidden-md-and-up">Empleos</span>
       </v-toolbar-title>
       
       <!-- Navegación desktop -->
@@ -24,99 +29,154 @@
           :key="item.route"
           :to="item.route"
           variant="text"
+          :prepend-icon="item.icon"
           class="mr-2"
         >
-          <v-icon left>{{ item.icon }}</v-icon>
           {{ item.title }}
         </v-btn>
       </div>
       
-      <v-spacer></v-spacer>
+      <v-spacer />
       
       <!-- Acciones de usuario -->
       <div class="d-flex align-center">
-        <!-- Notificaciones (solo si está autenticado) -->
+        <!-- Búsqueda rápida (desktop) -->
+        <v-text-field
+          v-if="!isMobile && isAuthenticated"
+          v-model="searchQuery"
+          density="compact"
+          variant="solo"
+          hide-details
+          single-line
+          placeholder="Buscar..."
+          class="mr-4 search-field"
+          style="max-width: 200px"
+          @keyup.enter="performSearch"
+        >
+          <template v-slot:append-inner>
+            <v-icon @click="performSearch">mdi-magnify</v-icon>
+          </template>
+        </v-text-field>
+        
+        <!-- Notificaciones -->
         <v-btn
           v-if="isAuthenticated"
           icon
-          @click="$router.push('/notificaciones')"
-          class="mr-2"
+          @click="navigateTo('/notificaciones')"
+          class="mr-1"
         >
           <v-badge
+            :model-value="unreadNotifications > 0"
             :content="unreadNotifications"
-            :value="unreadNotifications > 0"
             color="error"
+            overlap
           >
             <v-icon>mdi-bell</v-icon>
           </v-badge>
         </v-btn>
         
-        <!-- Mensajes (solo si está autenticado) -->
+        <!-- Mensajes -->
         <v-btn
           v-if="isAuthenticated"
           icon
-          @click="$router.push('/mensajes')"
+          @click="navigateTo('/mensajes')"
           class="mr-2"
         >
-          <v-icon>mdi-message</v-icon>
+          <v-badge
+            :model-value="unreadMessages > 0"
+            :content="unreadMessages"
+            color="error"
+            overlap
+          >
+            <v-icon>mdi-message</v-icon>
+          </v-badge>
         </v-btn>
         
         <!-- Menú de usuario o botones de auth -->
         <div v-if="isAuthenticated">
-          <v-menu>
+          <v-menu
+            v-model="userMenu"
+            :close-on-content-click="false"
+            location="bottom"
+            min-width="250"
+          >
             <template v-slot:activator="{ props }">
               <v-btn
                 icon
                 v-bind="props"
               >
-                <v-avatar size="36">
-                  <v-icon>mdi-account-circle</v-icon>
+                <v-avatar 
+                  size="36" 
+                  :color="getUserAvatarColor()"
+                >
+                  <span v-if="!userAvatar" class="text-h6">
+                    {{ getUserInitials() }}
+                  </span>
+                  <v-img v-else :src="userAvatar" />
                 </v-avatar>
               </v-btn>
             </template>
             
-            <v-list>
-              <v-list-item>
-                <v-list-item-title class="font-weight-bold">
-                  {{ user?.nombre || user?.email }}
-                </v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ user?.user_type || user?.rol }}
-                </v-list-item-subtitle>
-              </v-list-item>
-              
-              <v-divider></v-divider>
-              
-              <v-list-item
-                v-for="item in userMenuItems"
-                :key="item.route"
-                :to="item.route"
-                @click="item.action && item.action()"
-              >
-                <template v-slot:prepend>
-                  <v-icon>{{ item.icon }}</v-icon>
-                </template>
-                <v-list-item-title>{{ item.title }}</v-list-item-title>
-              </v-list-item>
-            </v-list>
+            <v-card>
+              <v-list>
+                <v-list-item class="px-4 py-3">
+                  <div class="d-flex align-center">
+                    <v-avatar 
+                      size="48" 
+                      :color="getUserAvatarColor()"
+                      class="mr-3"
+                    >
+                      <span v-if="!userAvatar" class="text-h6">
+                        {{ getUserInitials() }}
+                      </span>
+                      <v-img v-else :src="userAvatar" />
+                    </v-avatar>
+                    <div>
+                      <div class="font-weight-bold">
+                        {{ user?.nombre || user?.email?.split('@')[0] || 'Usuario' }}
+                      </div>
+                      <div class="text-caption text-grey">
+                        {{ getUserTypeLabel() }}
+                      </div>
+                      <div class="text-caption text-grey">
+                        {{ user?.email }}
+                      </div>
+                    </div>
+                  </div>
+                </v-list-item>
+                
+                <v-divider />
+                
+                <v-list-item
+                  v-for="item in userMenuItems"
+                  :key="item.route || item.title"
+                  :to="item.route"
+                  @click="handleMenuItemClick(item)"
+                  :prepend-icon="item.icon"
+                >
+                  <v-list-item-title>{{ item.title }}</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-card>
           </v-menu>
         </div>
         
         <div v-else class="d-flex gap-2">
           <v-btn
-            color="white"
             variant="outlined"
-            @click="$router.push('/login')"
+            @click="navigateTo('/login')"
             size="small"
+            class="hidden-xs"
           >
             Iniciar Sesión
           </v-btn>
           <v-btn
             color="secondary"
-            @click="$router.push('/register')"
+            @click="navigateTo('/register')"
             size="small"
           >
-            Registro
+            <span class="hidden-xs">Registro</span>
+            <v-icon class="hidden-sm-and-up">mdi-account-plus</v-icon>
           </v-btn>
         </div>
       </div>
@@ -127,35 +187,79 @@
       v-if="!hideNavigation && isMobile"
       v-model="drawer" 
       temporary
+      width="280"
     >
       <v-list>
+        <!-- Header del usuario en drawer -->
         <v-list-item
           v-if="isAuthenticated"
-          class="px-2"
+          class="px-4 py-3 bg-primary"
         >
           <div class="d-flex align-center">
-            <v-avatar class="mr-3">
-              <v-icon>mdi-account-circle</v-icon>
+            <v-avatar 
+              size="56"
+              :color="getUserAvatarColor()"
+              class="mr-3"
+            >
+              <span v-if="!userAvatar" class="text-h5">
+                {{ getUserInitials() }}
+              </span>
+              <v-img v-else :src="userAvatar" />
             </v-avatar>
             <div>
-              <div class="font-weight-bold">{{ user?.nombre || user?.email }}</div>
-              <div class="text-caption text-grey">{{ user?.user_type || user?.rol }}</div>
+              <div class="font-weight-bold text-white">
+                {{ user?.nombre || user?.email?.split('@')[0] || 'Usuario' }}
+              </div>
+              <div class="text-caption" style="opacity: 0.8">
+                {{ getUserTypeLabel() }}
+              </div>
             </div>
           </div>
         </v-list-item>
         
-        <v-divider v-if="isAuthenticated" class="my-2"></v-divider>
+        <!-- Búsqueda en móvil -->
+        <v-list-item v-if="isAuthenticated" class="pa-3">
+          <v-text-field
+            v-model="searchQuery"
+            density="compact"
+            variant="outlined"
+            hide-details
+            placeholder="Buscar..."
+            @keyup.enter="performSearch"
+          >
+            <template v-slot:append-inner>
+              <v-icon @click="performSearch">mdi-magnify</v-icon>
+            </template>
+          </v-text-field>
+        </v-list-item>
         
+        <v-divider v-if="isAuthenticated" />
+        
+        <!-- Items del menú -->
         <v-list-item
           v-for="item in allMenuItems"
           :key="item.route || item.title"
           :to="item.route"
-          @click="item.action && item.action()"
+          @click="handleMenuItemClick(item)"
+          :prepend-icon="item.icon"
         >
-          <template v-slot:prepend>
-            <v-icon>{{ item.icon }}</v-icon>
-          </template>
           <v-list-item-title>{{ item.title }}</v-list-item-title>
+          
+          <!-- Badges para notificaciones y mensajes -->
+          <template v-slot:append>
+            <v-badge
+              v-if="item.route === '/notificaciones' && unreadNotifications > 0"
+              :content="unreadNotifications"
+              color="error"
+              inline
+            />
+            <v-badge
+              v-if="item.route === '/mensajes' && unreadMessages > 0"
+              :content="unreadMessages"
+              color="error"
+              inline
+            />
+          </template>
         </v-list-item>
         
         <!-- Botones de auth para móvil si no está autenticado -->
@@ -163,7 +267,7 @@
           <v-btn
             color="primary"
             block
-            @click="$router.push('/login')"
+            @click="navigateTo('/login')"
             class="mb-2"
           >
             Iniciar Sesión
@@ -172,7 +276,7 @@
             color="secondary"
             variant="outlined"
             block
-            @click="$router.push('/register')"
+            @click="navigateTo('/register')"
           >
             Registro
           </v-btn>
@@ -182,10 +286,23 @@
     
     <!-- Contenido principal -->
     <v-main>
-      <router-view />
+      <!-- Barra de progreso para carga -->
+      <v-progress-linear
+        v-if="loading"
+        indeterminate
+        color="primary"
+        class="position-absolute"
+        style="z-index: 999"
+      />
+      
+      <router-view v-slot="{ Component }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </v-main>
     
-    <!-- Footer simplificado - SIN ENLACES PROBLEMÁTICOS -->
+    <!-- Footer simplificado -->
     <v-footer 
       v-if="!hideNavigation" 
       app 
@@ -193,9 +310,17 @@
       class="text-white"
     >
       <v-container>
-        <div class="text-center">
-          <span>Plataforma de Empleo &copy; {{ new Date().getFullYear() }}</span>
-        </div>
+        <v-row align="center" justify="center">
+          <v-col cols="12" class="text-center">
+            <div class="mb-2">
+              <v-icon size="24" class="mr-2">mdi-briefcase</v-icon>
+              <span class="font-weight-medium">Plataforma de Empleo</span>
+            </div>
+            <div class="text-caption">
+              © {{ new Date().getFullYear() }} - Todos los derechos reservados
+            </div>
+          </v-col>
+        </v-row>
       </v-container>
     </v-footer>
     
@@ -205,8 +330,14 @@
       :color="snackbar.color"
       :timeout="snackbar.timeout"
       location="top right"
+      multi-line
     >
-      {{ snackbar.message }}
+      <div class="d-flex align-center">
+        <v-icon v-if="snackbar.icon" class="mr-2">
+          {{ snackbar.icon }}
+        </v-icon>
+        {{ snackbar.message }}
+      </div>
       <template v-slot:actions>
         <v-btn
           variant="text"
@@ -216,11 +347,43 @@
         </v-btn>
       </template>
     </v-snackbar>
+
+    <!-- Dialog de confirmación global -->
+    <v-dialog
+      v-model="confirmDialog.show"
+      max-width="400"
+      persistent
+    >
+      <v-card>
+        <v-card-title class="text-h6">
+          {{ confirmDialog.title }}
+        </v-card-title>
+        <v-card-text>
+          {{ confirmDialog.message }}
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            text
+            @click="confirmDialog.show = false; confirmDialog.reject()"
+          >
+            Cancelar
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="confirmDialog.show = false; confirmDialog.resolve()"
+          >
+            Confirmar
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import api from '/src/api/api'
@@ -231,15 +394,34 @@ const { mobile } = useDisplay()
 
 // Estados reactivos
 const drawer = ref(false)
+const userMenu = ref(false)
 const user = ref(null)
+const userAvatar = ref(null)
 const unreadNotifications = ref(0)
+const unreadMessages = ref(0)
+const searchQuery = ref('')
+const loading = ref(false)
+
+// Intervalos para actualización
+let notificationInterval = null
+let messageInterval = null
 
 // Snackbar para notificaciones
 const snackbar = ref({
   show: false,
   message: '',
   color: 'success',
-  timeout: 4000
+  timeout: 4000,
+  icon: null
+})
+
+// Dialog de confirmación
+const confirmDialog = ref({
+  show: false,
+  title: '',
+  message: '',
+  resolve: () => {},
+  reject: () => {}
 })
 
 // Computadas
@@ -264,14 +446,16 @@ const userMenuItems = computed(() => {
     { title: 'Configuración', route: '/configuracion', icon: 'mdi-cog' }
   ]
   
-  if (user.value?.user_type === 'postulante' || user.value?.rol === 'usuario') {
+  const userType = user.value?.user_type || user.value?.rol
+  
+  if (userType === 'postulante' || userType === 'usuario') {
     baseItems.unshift(
       { title: 'Mi Currículum', route: '/curriculum', icon: 'mdi-file-document' },
       { title: 'Mis Postulaciones', route: '/mis-postulaciones', icon: 'mdi-file-send' }
     )
   }
   
-  if (user.value?.user_type === 'empresa' || user.value?.rol === 'admin') {
+  if (userType === 'empresa' || userType === 'admin') {
     baseItems.unshift(
       { title: 'Mis Ofertas', route: '/mis-ofertas', icon: 'mdi-briefcase-plus' },
       { title: 'Dashboard', route: '/dashboard', icon: 'mdi-view-dashboard' }
@@ -279,7 +463,8 @@ const userMenuItems = computed(() => {
   }
   
   baseItems.push(
-    { title: 'Cerrar Sesión', action: logout, icon: 'mdi-logout' }
+    { title: 'divider' },
+    { title: 'Cerrar Sesión', action: logout, icon: 'mdi-logout', color: 'error' }
   )
   
   return baseItems
@@ -290,25 +475,65 @@ const allMenuItems = computed(() => {
     return mainMenuItems.value
   }
   
-  return [
+  const items = [
     ...mainMenuItems.value,
+    { title: 'divider' },
     { title: 'Notificaciones', route: '/notificaciones', icon: 'mdi-bell' },
     { title: 'Mensajes', route: '/mensajes', icon: 'mdi-message' },
-    ...userMenuItems.value
+    { title: 'divider' }
   ]
+  
+  // Filtrar items del menú de usuario, excluyendo dividers
+  const userItems = userMenuItems.value.filter(item => item.title !== 'divider')
+  items.push(...userItems)
+  
+  return items
 })
 
-// Métodos
+// Métodos auxiliares
+const getUserInitials = () => {
+  const name = user.value?.nombre || user.value?.email || 'U'
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
+
+const getUserAvatarColor = () => {
+  const colors = ['primary', 'secondary', 'success', 'info', 'warning']
+  const name = user.value?.nombre || user.value?.email || ''
+  const index = name.charCodeAt(0) % colors.length
+  return colors[index]
+}
+
+const getUserTypeLabel = () => {
+  const type = user.value?.user_type || user.value?.rol
+  const labels = {
+    'postulante': 'Postulante',
+    'empresa': 'Empresa',
+    'admin': 'Administrador',
+    'usuario': 'Usuario'
+  }
+  return labels[type] || 'Usuario'
+}
+
+// Métodos principales
 const loadUser = () => {
   const userData = localStorage.getItem('user')
   if (userData) {
-    user.value = JSON.parse(userData)
+    try {
+      user.value = JSON.parse(userData)
+      // Cargar avatar si existe
+      if (user.value?.avatar_url) {
+        userAvatar.value = user.value.avatar_url
+      }
+    } catch (error) {
+      console.error('Error parsing user data:', error)
+      localStorage.removeItem('user')
+    }
   }
 }
 
 const logout = async () => {
+  loading.value = true
   try {
-    // Añadir token a blacklist si es necesario
     const token = localStorage.getItem('token')
     if (token) {
       await api.addTokenToBlacklist(token)
@@ -319,10 +544,15 @@ const logout = async () => {
     // Limpiar datos locales
     api.logout()
     user.value = null
+    userAvatar.value = null
     unreadNotifications.value = 0
+    unreadMessages.value = 0
     
-    // Mostrar mensaje y redirigir
-    showSnackbar('Sesión cerrada correctamente', 'info')
+    // Limpiar intervalos
+    clearIntervals()
+    
+    loading.value = false
+    showSnackbar('Sesión cerrada correctamente', 'info', 'mdi-logout')
     router.push('/login')
   }
 }
@@ -338,13 +568,100 @@ const loadNotifications = async () => {
   }
 }
 
-const showSnackbar = (message, color = 'success', timeout = 4000) => {
+const loadMessages = async () => {
+  if (!isAuthenticated.value || !user.value?.id) return
+  
+  try {
+    // Aquí deberías tener un endpoint para mensajes no leídos
+    // Por ahora simularemos con mensajes recibidos
+    const response = await api.getMensajes(null, user.value.id)
+    // Filtrar mensajes no leídos
+    unreadMessages.value = response.data.filter(m => !m.leido).length
+  } catch (error) {
+    console.error('Error cargando mensajes:', error)
+  }
+}
+
+const performSearch = () => {
+  if (searchQuery.value.trim()) {
+    router.push({
+      path: '/ofertas',
+      query: { q: searchQuery.value }
+    })
+    searchQuery.value = ''
+    if (isMobile.value) {
+      drawer.value = false
+    }
+  }
+}
+
+const navigateTo = (path) => {
+  router.push(path)
+  userMenu.value = false
+  if (isMobile.value) {
+    drawer.value = false
+  }
+}
+
+const navigateHome = () => {
+  router.push('/')
+}
+
+const handleMenuItemClick = (item) => {
+  if (item.action) {
+    item.action()
+  }
+  userMenu.value = false
+  drawer.value = false
+}
+
+const showSnackbar = (message, color = 'success', icon = null, timeout = 4000) => {
   snackbar.value = {
     show: true,
     message,
     color,
+    icon,
     timeout
   }
+}
+
+const showConfirmDialog = (title, message) => {
+  return new Promise((resolve, reject) => {
+    confirmDialog.value = {
+      show: true,
+      title,
+      message,
+      resolve,
+      reject
+    }
+  })
+}
+
+const clearIntervals = () => {
+  if (notificationInterval) {
+    clearInterval(notificationInterval)
+    notificationInterval = null
+  }
+  if (messageInterval) {
+    clearInterval(messageInterval)
+    messageInterval = null
+  }
+}
+
+const setupIntervals = () => {
+  // Actualizar notificaciones cada 30 segundos
+  notificationInterval = setInterval(() => {
+    if (isAuthenticated.value) {
+      loadNotifications()
+    }
+  }, 30000)
+  
+  // Actualizar mensajes cada 45 segundos
+  messageInterval = setInterval(() => {
+    if (isAuthenticated.value) {
+      loadMessages()
+    }
+  }, 45000)
 }
 
 // Watchers
@@ -359,50 +676,154 @@ watch(isAuthenticated, (newVal) => {
   if (newVal) {
     loadUser()
     loadNotifications()
+    loadMessages()
+    setupIntervals()
   } else {
     user.value = null
+    userAvatar.value = null
     unreadNotifications.value = 0
+    unreadMessages.value = 0
+    clearIntervals()
   }
+})
+
+// Escuchar eventos de actualización
+window.addEventListener('user-updated', () => {
+  loadUser()
+})
+
+window.addEventListener('notification-received', () => {
+  loadNotifications()
 })
 
 // Lifecycle
 onMounted(() => {
-  loadUser()
   if (isAuthenticated.value) {
+    loadUser()
     loadNotifications()
-    
-    // Actualizar notificaciones cada 30 segundos
-    setInterval(() => {
-      if (isAuthenticated.value) {
-        loadNotifications()
-      }
-    }, 30000)
+    loadMessages()
+    setupIntervals()
   }
 })
 
-// Exponer métodos globalmente para uso en otros componentes
+onUnmounted(() => {
+  clearIntervals()
+})
+
+// Proveer métodos globalmente
+provide('showSnackbar', showSnackbar)
+provide('showConfirmDialog', showConfirmDialog)
+
+// Exponer métodos globalmente para compatibilidad
 window.showSnackbar = showSnackbar
+window.showConfirmDialog = showConfirmDialog
 </script>
 
 <style scoped>
+/* Transiciones */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Utilidades */
 .cursor-pointer {
   cursor: pointer;
 }
 
-.gap-2 > * {
+.gap-2 > * + * {
   margin-left: 8px;
+}
+
+/* Header */
+.app-header {
+  backdrop-filter: blur(10px);
+  background-color: rgba(var(--v-theme-primary), 0.95) !important;
 }
 
 .v-toolbar-title {
   font-weight: bold;
   font-size: 1.25rem;
+  user-select: none;
 }
 
-.v-app-bar {
-  backdrop-filter: blur(10px);
+/* Búsqueda */
+.search-field :deep(.v-field) {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
+.search-field :deep(.v-field__input) {
+  color: white;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.search-field :deep(.v-field__input::placeholder) {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.search-field :deep(.v-icon) {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Navigation drawer */
+.v-navigation-drawer {
+  background: linear-gradient(to bottom, var(--v-theme-surface), var(--v-theme-background));
+}
+
+.bg-primary {
+  background-color: rgb(var(--v-theme-primary)) !important;
+  color: white;
+}
+
+/* Footer */
 .v-footer {
   margin-top: auto;
+  background: linear-gradient(135deg, var(--v-theme-primary), var(--v-theme-primary-darken-1));
+}
+
+/* Badges mejorados */
+:deep(.v-badge__badge) {
+  font-size: 10px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 4px;
+}
+
+/* Avatar con hover */
+.v-avatar {
+  transition: transform 0.2s;
+}
+
+.v-btn:hover .v-avatar {
+  transform: scale(1.1);
+}
+
+/* Botones con mejor hover */
+.v-btn {
+  transition: all 0.3s;
+}
+
+/* Progress bar */
+.v-progress-linear {
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .v-toolbar-title {
+    font-size: 1.1rem;
+  }
+  
+  .search-field {
+    max-width: 150px !important;
+  }
 }
 </style>
